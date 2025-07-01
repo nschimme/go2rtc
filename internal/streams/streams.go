@@ -13,28 +13,32 @@ import (
 )
 
 func Init() {
-	var cfg struct {
+	// Load streams-specific global settings (like backchannel timeout)
+	app.LoadConfig(&CFG) // CFG is var in internal/streams/config.go (or should be)
+
+	// Load legacy stream definitions and publish settings
+	var legacyCfg struct {
 		Streams map[string]any `yaml:"streams"`
 		Publish map[string]any `yaml:"publish"`
 	}
-
-	app.LoadConfig(&cfg)
+	app.LoadConfig(&legacyCfg)
 
 	log = app.GetLogger("streams")
 
-	for name, item := range cfg.Streams {
+	// Initialize streams from legacy "streams" map
+	for name, item := range legacyCfg.Streams {
 		streams[name] = NewStream(item)
 	}
 
 	api.HandleFunc("api/streams", apiStreams)
 	api.HandleFunc("api/streams.dot", apiStreamsDOT)
 
-	if cfg.Publish == nil {
+	if legacyCfg.Publish == nil {
 		return
 	}
 
 	time.AfterFunc(time.Second, func() {
-		for name, dst := range cfg.Publish {
+		for name, dst := range legacyCfg.Publish {
 			if stream := Get(name); stream != nil {
 				Publish(stream, dst)
 			}

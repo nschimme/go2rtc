@@ -72,13 +72,31 @@ func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
 					log.Trace().Msgf("[streams] match cons=%d => prod=%d", consN, prodN)
 
 					// Step 4. Get recvonly track from consumer (backchannel)
-					if track, err = cons.(core.Producer).GetTrack(consMedia, consCodec); err != nil {
-						log.Info().Err(err).Msg("[streams] can't get track")
+					var clientTrack *core.Receiver // The original track from the client
+					if clientTrack, err = cons.(core.Producer).GetTrack(consMedia, consCodec); err != nil {
+						log.Info().Err(err).Msg("[streams] can't get client track for backchannel")
 						continue
 					}
-					// Step 5. Add track to producer
-					if err = prod.AddTrack(prodMedia, prodCodec, track); err != nil {
-						log.Info().Err(err).Msg("[streams] can't add track")
+
+					// If this is an audio backchannel track (producer offers to receive audio),
+					// wrap the track from the client (consumer) with an inactivity monitor.
+					configInactivityTimeout := GetBackchannelInactivityTimeout()
+					if configInactivityTimeout > 0 && prodMedia.Kind == core.KindAudio && prodMedia.Direction == core.DirectionSendonly {
+						log.Trace().Msgf("[streams] wrapping backchannel audio track with inactivity monitor, timeout: %s", configInactivityTimeout)
+						// The InactiveReceiver effectively replaces clientTrack in the chain from this point onwards.
+						// It inherits the Codec and Media properties from clientTrack.
+						// The original producer (cons) will now be linked by the streams manager to this new InactiveReceiver.
+						clientTrack = NewInactiveReceiver(clientTrack.Codec, clientTrack.Media, configInactivityTimeout, log)
+					}
+
+					// Step 5. Add track to producer (e.g., the rtsp.Conn sending to source camera)
+					// 'clientTrack' is now potentially an InactiveReceiver.
+					if err = prod.AddTrack(prodMedia, prodCodec, clientTrack); err != nil {
+						log.Info().Err(err).Msg("[streams] can't add wrapped/original track to producer")
+						// If InactiveReceiver was created and AddTrack fails, close the InactiveReceiver.
+						if ir, ok := clientTrack.(*InactiveReceiver); ok { // check if it was wrapped
+							ir.Close()
+						}
 						prodErrors[prodN] = err
 						continue
 					}
