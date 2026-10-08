@@ -96,7 +96,7 @@ func execHandle(rawURL string) (prod core.Producer, err error) {
 		sig := syscall.Signal(core.Atoi(s))
 		cmd.Cancel = func() error {
 			log.Debug().Msgf("[exec] kill with signal=%d", sig)
-			return cmd.Process.Signal(sig)
+			return cmd.Signal(sig)
 		}
 	}
 
