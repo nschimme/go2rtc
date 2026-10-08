@@ -44,3 +44,28 @@ func Version() (string, error) {
 
 	return verFF, verErr
 }
+
+var faacMu sync.Mutex
+var faacErr error
+var faacVer string
+
+func FAACVersion() (string, error) {
+	faacMu.Lock()
+	defer faacMu.Unlock()
+
+	if faacVer != "" {
+		return faacVer, faacErr
+	}
+
+	cmd := exec.Command(defaults["bin_faac"], "-h")
+	if _, err := cmd.CombinedOutput(); err != nil {
+		faacVer = "-"
+		faacErr = err
+		return faacVer, faacErr
+	}
+
+	faacVer = "faac"
+	log.Debug().Msgf("[ffmpeg] faac bin")
+
+	return faacVer, nil
+}

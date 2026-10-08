@@ -58,8 +58,9 @@ func Init() {
 }
 
 var defaults = map[string]string{
-	"bin":     "ffmpeg",
-	"global":  "-hide_banner",
+	"bin":      "ffmpeg",
+	"bin_faac": "faac",
+	"global":   "-hide_banner",
 	"timeout": "5",
 
 	// inputs
@@ -74,6 +75,7 @@ var defaults = map[string]string{
 	"output/raw":   "-f yuv4mpegpipe -",
 	"output/aac":   "-f adts -",
 	"output/wav":   "-f wav -",
+	"output/faac":  "-f wav - | {bin_faac} -a - -o -",
 
 	// `-preset superfast` - we can't use ultrafast because it doesn't support `-profile main -level 4.1`
 	// `-tune zerolatency` - for minimal latency
@@ -378,7 +380,19 @@ func parseArgs(s string) *ffmpeg.Args {
 	case args.Video == 0 && args.Audio == 1:
 		switch core.Before(query.Get("audio"), "/") {
 		case "aac":
-			args.Output = defaults["output/aac"]
+			if _, err := FAACVersion(); err == nil {
+				for i, c := range args.Codecs {
+					args.Codecs[i] = strings.Replace(c, "-c:a aac", "-c:a pcm_s16le", 1)
+				}
+				faacCmd := strings.Replace(defaults["output/faac"], "{bin_faac}", defaults["bin_faac"], 1)
+				if b := query.Get("bitrate"); b != "" {
+					b = strings.TrimSuffix(b, "k")
+					faacCmd = strings.Replace(faacCmd, "-a", "-a -b "+b, 1)
+				}
+				args.Output = faacCmd
+			} else {
+				args.Output = defaults["output/aac"]
+			}
 		case "pcma", "pcmu", "pcml":
 			args.Output = defaults["output/wav"]
 		}

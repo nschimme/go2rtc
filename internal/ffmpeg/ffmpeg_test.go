@@ -52,6 +52,21 @@ func TestParseArgsFile(t *testing.T) {
 	}
 }
 
+func TestFAAC(t *testing.T) {
+	faacVer = "faac"
+	faacErr = nil
+	defer func() {
+		faacVer = ""
+		faacErr = nil
+	}()
+
+	args := parseArgs("rtsp://example.com#audio=aac")
+	require.Equal(t, `ffmpeg -hide_banner -allowed_media_types audio -fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i rtsp://example.com -c:a pcm_s16le -vn -f wav - | faac -a - -o -`, args.String())
+
+	argsWithBitrate := parseArgs("rtsp://example.com#audio=aac#bitrate=128k")
+	require.Equal(t, `ffmpeg -hide_banner -allowed_media_types audio -fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i rtsp://example.com -b:v 128k -maxrate 128k -bufsize 128k -c:a pcm_s16le -vn -f wav - | faac -a -b 128 - -o -`, argsWithBitrate.String())
+}
+
 func TestParseArgsDevice(t *testing.T) {
 	tests := []struct {
 		name   string
